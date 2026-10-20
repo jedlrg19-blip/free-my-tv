@@ -84,6 +84,15 @@ final class HomeMode {
         "com.mediatek.wwtv.tvcenter", "com.mediatek.wwtv.setupwizard", "com.mediatek.tv.factory",
         "mediatek.factorymenu.ui", "com.tpv.xmic.ots.cms.client"));
 
+    /** Hisense (HiSmartTV, MediaTek chip): its system pieces aren't listed one by one, so the whole family is protected. */
+    private static final String[] PROTECTED_PREFIXES = {"com.hisense.", "com.mediatek.", "com.vidaa."};
+
+    private static boolean isProtected(String pkg) {
+        if (PROTECTED.contains(pkg)) return true;
+        for (String p : PROTECTED_PREFIXES) if (pkg.startsWith(p)) return true;
+        return false;
+    }
+
     /** One switch at a time (jobs can overlap: a boot check and a button press). */
     private static final Object RUN = new Object();
     private static final Object FILE_LOCK = new Object();
@@ -216,7 +225,7 @@ final class HomeMode {
             for (String pkg : targets) {
                 done++;
                 busy(c, Ui.tr("Desligando apps (", "Turning off apps (") + done + "/" + targets.size() + ")…");
-                if (PROTECTED.contains(pkg) || !present.contains(pkg) || owners.contains(pkg)) continue;
+                if (isProtected(pkg) || !present.contains(pkg) || owners.contains(pkg)) continue;
                 String out = adb.shell("pm disable-user --user 0 " + pkg);
                 if (out.contains("disabled-user")) disabled.add(pkg);
                 else AppLog.w("could not turn off " + pkg + ": " + out.trim());
@@ -359,7 +368,7 @@ final class HomeMode {
                 }
                 Set<String> disabled = new HashSet<>(stringList(s, "disabled"));
                 for (String pkg : sorted(wanted)) {
-                    if (PROTECTED.contains(pkg) || !present.contains(pkg) || owners.contains(pkg)) continue;
+                    if (isProtected(pkg) || !present.contains(pkg) || owners.contains(pkg)) continue;
                     if (disabledNow.contains(pkg)) {
                         disabled.add(pkg);
                         continue;
