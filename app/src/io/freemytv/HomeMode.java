@@ -63,6 +63,9 @@ final class HomeMode {
         "com.tcl.messagebox", "com.tcl.usercenter",                                   // TCL messages and account
         "com.tcl.exhibit", "com.tcl.esticker", "com.tcl.hotelmenu",                   // store demo, hotel menu
         "com.tcl.repairguide", "com.tcl.ocean.instructions", "com.tcl.logkit",        // repair guide, manual, logs
+        // Hisense (HiSmartTV A4, Android 9)
+        "com.hisense.storemode", "com.hisense.app.logreport",                         // store demo, log reporting
+        "fusion.android.tv.demo", "com.pandora.android.atv", "air.com.vudu.air.DownloaderTablet", // demo, Pandora, Vudu
     };
 
     /** The voice assistant, only with disable_assistant=true in config.properties (the mic button stops working). */
@@ -89,6 +92,7 @@ final class HomeMode {
 
     private static boolean isProtected(String pkg) {
         if (PROTECTED.contains(pkg)) return true;
+        if (Arrays.asList(DEBLOAT).contains(pkg)) return false;
         for (String p : PROTECTED_PREFIXES) if (pkg.startsWith(p)) return true;
         return false;
     }

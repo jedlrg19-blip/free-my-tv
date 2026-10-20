@@ -102,7 +102,11 @@ final class HomeApps {
             "com.tcl.dashboard",                    // TCL Home
             "com.tcl.ocean.instructions",           // TCL: User Guide
             "com.tcl.guard",                        // TCL: Safety Guard
-            "com.tcl.exhibit"));                    // TCL: T-Exhibition
+            "com.tcl.exhibit",                      // TCL: T-Exhibition
+            "com.hisense.storemode",                // Hisense: store demo
+            "fusion.android.tv.demo",               // demo
+            "com.pandora.android.atv",              // Pandora
+            "air.com.vudu.air.DownloaderTablet"));  // Vudu
 
     private static final Map<String, Bitmap> TILES = new HashMap<>();   // key → ready card
     private static final Map<String, Bitmap> LOGOS = new HashMap<>();   // key → colored logo with no background
