@@ -82,6 +82,7 @@ final class HomeApps {
         {"netflix", "Netflix", "com.netflix.ninja", "E50914", "", "1"},
         {"youtube", "YouTube", "com.google.android.youtube.tv", "FF0033", "play", "1"},
         {"prime", "Prime Video", "com.amazon.amazonvideo.livingroom", "1A98FF", "tint", "0.96"},
+        {"vix", "ViX", "com.univision.prendetv", "FF7A00", "", "1"},   // package from the phone app: check with pm list packages -3
         {"disney", "Disney+", "com.disney.disneyplus", "1838C8", "", "1"},
         {"max", "Max", "com.wbd.stream", "6C3BE0", "", "1.32"},
         {"appletv", "Apple TV", "com.apple.atve.androidtv.appletv", "B8BCC6", "", "1.1"},
@@ -91,7 +92,7 @@ final class HomeApps {
         {"globoplay", "Globoplay", "com.globo.globotv", "FF5A1F", "tint", "1"},
         {"spotify", "Spotify", "com.spotify.tv.android", "1DB954", "", "1"},
     };
-    static final int MAX_SHELF = 5;   // fewer tiles: lighter to draw on the A4 and calmer to look at
+    static final int MAX_SHELF = 6;   // room to add shortcuts in Settings > Shelf, still light to draw on the A4
     /** Live TV apps of some brands (the antenna's channels open through the standard Android request first). */
     static final String[] LIVE_TV_APPS = {"com.tcl.tv", "com.google.android.tv", "com.mediatek.wwtv.tvcenter", "com.sony.dtv.tvx"};
     /** Kept out of "All Apps" (only hidden, still installed). Add the ones your TV shows that you never use. */
