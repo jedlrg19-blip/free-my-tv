@@ -136,8 +136,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private List<Recs.Pick> cards = new ArrayList<>();
     private final Spring[] topFocus = new Spring[6];
     private final RectF[] topRects = new RectF[6];
-    private final Spring[] cardFocus = new Spring[3];
-    private final RectF[] cardRects = new RectF[3];
+    /** The row of posters: up to five tall cards (three tall-and-wide cards while there are no picks yet). */
+    private static final int CARDS_MAX = 5;
+    private final Spring[] cardFocus = new Spring[CARDS_MAX];
+    private final RectF[] cardRects = new RectF[CARDS_MAX];
     private final List<HomeApps.Item> lightButtons = new ArrayList<>();
     private Paint lTitle, lTab, lTabOn, lCardTitle, lCardMeta, lQuote, lTip;
     private Paint infoLabel, infoBig, infoTemp, infoMid, infoDim;   // text of the live cards (no picks yet)
@@ -364,7 +366,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             topFocus[i] = new Spring(0.26f, 0.85f, 0);
             topRects[i] = new RectF();
         }
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < CARDS_MAX; i++) {
             cardFocus[i] = new Spring(0.32f, 0.78f, 0);
             cardRects[i] = new RectF();
         }
@@ -2075,7 +2077,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             return;
         }
         for (int i = 0; i < 3 + lightButtons.size(); i++) out.add(a11yId(Z_TOP, i));
-        for (int i = 0; i < Math.min(3, cards.size()); i++) out.add(a11yId(Z_CARDS, i));
+        for (int i = 0; i < cardSlots() && i < cards.size(); i++) out.add(a11yId(Z_CARDS, i));
         for (int i = 0; i < shelf.size(); i++) out.add(a11yId(Z_SHELF, i));
         for (int i = 0; i < drawerItems.size(); i++) out.add(a11yId(Z_DRAWER, i));
     }
@@ -2119,7 +2121,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 dy = (i < 3 ? heroLayer : status).getTranslationY();
                 break;
             case Z_CARDS:
-                if (i >= Math.min(3, cards.size())) return false;
+                if (i >= cardSlots() || i >= cards.size()) return false;
                 a11yRect.set(cardRects[i]);
                 dy = heroLayer.getTranslationY();
                 break;
@@ -2228,19 +2230,49 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             topRects[3 + i].set(right - b, cy - b / 2, right, cy + b / 2);
             right -= b + L_BUTTON_GAP * k;
         }
-        float top = L_CARDS_TOP * k, ch = L_CARD_H * k, g = L_CARD_GAP * k, left = MARGIN * k, tall = L_TALL_W * k;
-        float wide = (CONTENT_R - MARGIN) * k - 2 * tall - 2 * g;
-        cardRects[0].set(left, top, left + wide, top + ch);
-        cardRects[1].set(cardRects[0].right + g, top, cardRects[0].right + g + tall, top + ch);
-        cardRects[2].set(cardRects[1].right + g, top, cardRects[1].right + g + tall, top + ch);
+        placeCards();
         heroDirty = statusDirty = true;
+    }
+
+    /** How many card slots are drawn: the picks, or the three live cards while there are none. */
+    private int cardSlots() {
+        return cards.isEmpty() ? 3 : Math.min(CARDS_MAX, cards.size());
+    }
+
+    /**
+     * With picks: a row of tall posters filling the content width (centered when there are fewer than five). Without
+     * them: one wide live card and two tall ones.
+     */
+    private void placeCards() {
+        float top = L_CARDS_TOP * k, ch = L_CARD_H * k, g = L_CARD_GAP * k, left = MARGIN * k, tall = L_TALL_W * k;
+        float full = (CONTENT_R - MARGIN) * k;
+        if (cards.isEmpty()) {
+            float wide = full - 2 * tall - 2 * g;
+            cardRects[0].set(left, top, left + wide, top + ch);
+            cardRects[1].set(cardRects[0].right + g, top, cardRects[0].right + g + tall, top + ch);
+            cardRects[2].set(cardRects[1].right + g, top, cardRects[1].right + g + tall, top + ch);
+            return;
+        }
+        int n = cardSlots();
+        float cw = (full - (CARDS_MAX - 1) * g) / CARDS_MAX;
+        float x = left + (full - (n * cw + (n - 1) * g)) / 2;
+        for (int i = 0; i < n; i++) {
+            cardRects[i].set(x, top, x + cw, top + ch);
+            x += cw + g;
+        }
     }
 
     /** The three cards of the current tab (Explore, Movies, Shows) and the background taken from the first one. */
     private void updateCards() {
-        List<Recs.Pick> list = recs.now(TAB_KIND[tab]);
+        List<Recs.Pick> list = new ArrayList<>(recs.now(TAB_KIND[tab]));   // this tab's picks lead the row
+        if (!list.isEmpty()) {
+            java.util.Set<String> seen = new java.util.HashSet<>();
+            for (Recs.Pick q : list) seen.add(Recs.key(q));
+            for (Recs.Pick q : recs.wanted()) if (list.size() < CARDS_MAX && seen.add(Recs.key(q))) list.add(q);
+        }
         if (!samePicks(list, cards)) {
             cards = list;
+            placeCards();
             cardIndex = Math.min(cardIndex, Math.max(0, list.size() - 1));
             if (zone == Z_CARDS && list.isEmpty()) {
                 zone = Z_SHELF;
@@ -2248,7 +2280,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             }
         }
         for (Recs.Pick p : recs.wanted()) recs.backdrop(p);   // all three tabs preloaded: switching tabs is instant
-        Backdrop b = cards.isEmpty() ? null : recs.backdrop(cards.get(0));
+        Backdrop b = cards.isEmpty() ? null : recs.backdrop(cards.get(zone == Z_CARDS ? Math.min(cardIndex, cards.size() - 1) : 0));
         if (cards.isEmpty() || b != null) showBackdrop(b);
         heroDirty = true;
         spoken.focusMoved();    // new picks under the focused card
@@ -2411,8 +2443,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             c.drawText(tabs()[i], r.centerX() - p.measureText(tabs()[i]) / 2, r.centerY() + Ui.halfCap(p), p);
         }
         int top = -1;
-        for (int i = 0; i < 3; i++) if (cardFocus[i].value > 0.02f && (top < 0 || cardFocus[i].value > cardFocus[top].value)) top = i;
-        for (int i = 0; i < 3; i++) if (i != top) drawLightCard(c, i);
+        int slots = cardSlots();
+        for (int i = 0; i < slots; i++) if (cardFocus[i].value > 0.02f && (top < 0 || cardFocus[i].value > cardFocus[top].value)) top = i;
+        for (int i = 0; i < slots; i++) if (i != top) drawLightCard(c, i);
         if (top >= 0) drawLightCard(c, top);
         if (HomeData.coinCount() > 0) drawQuotes(c);
     }
@@ -2497,7 +2530,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         shadows.draw(c, tmp, r0, DEEP_BLUR * k, shadowDeep);
         c.restore();
         Backdrop b = p == null ? null : recs.backdrop(p);
-        Bitmap img = b == null ? null : (i == 0 ? b.wide : b.tall);
+        Bitmap img = b == null ? null : b.tall;   // the posters are all tall (the wide crop is no longer used)
         if (img != null) {
             roundImage(c, img, cell, r);
         } else {
@@ -2521,9 +2554,13 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (p == null) return;
         TextPaint tp = new TextPaint(lCardTitle);
         c.drawText(TextUtils.ellipsize(p.title, tp, bw, TextUtils.TruncateAt.END).toString(), base.left, base.bottom + 46 * k, lCardTitle);
-        if (i == 0 && p.meta != null && !p.meta.isEmpty()) {
+        String service = Recs.serviceName(p);
+        if (service == null) service = "";
+        String sub = (p.rating > 0 ? String.format(java.util.Locale.US, "\u2605 %.1f", p.rating) : "")
+                + (p.rating > 0 && !service.isEmpty() ? "  \u00b7  " : "") + service;
+        if (!sub.isEmpty()) {
             TextPaint mp = new TextPaint(lCardMeta);
-            c.drawText(TextUtils.ellipsize(p.meta, mp, bw, TextUtils.TruncateAt.END).toString(), base.left, base.bottom + 80 * k, lCardMeta);
+            c.drawText(TextUtils.ellipsize(sub, mp, bw, TextUtils.TruncateAt.END).toString(), base.left, base.bottom + 80 * k, lCardMeta);
         }
     }
 
@@ -2607,6 +2644,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         }
         retarget(false);
         click.move();
+        if (zone == Z_CARDS && !cards.isEmpty()) {   // the background follows the focused poster
+            Backdrop nb = recs.backdrop(cards.get(Math.min(cardIndex, cards.size() - 1)));
+            if (nb != null) showBackdrop(nb);
+        }
         return true;
     }
 

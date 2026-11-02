@@ -44,6 +44,7 @@ final class Recs {
         int id;
         String kind;            // "movie" or "tv"
         String title, backdrop, meta = "", app, pkg;
+        float rating;           // TMDB's average vote (0-10), 0 when unknown
         boolean detailed;
     }
 
@@ -53,7 +54,7 @@ final class Recs {
     private static final String IMAGES = "https://image.tmdb.org/t/p/original";
     private static final long LIST_EVERY = 6 * 3600_000L;
     /** Bump when what is saved for each title changes (the saved list is discarded and fetched again). */
-    private static final int CACHE_VERSION = 3;
+    private static final int CACHE_VERSION = 4;
     private static final int MANHA = 0, TARDE = 1, NOITE = 2;
     static final String[] PERIOD_LABEL = {"PARA ESTA MANHÃ", "PARA ESTA TARDE", "PARA ESTA NOITE"};
     static final String[] PERIOD_LABEL_EN = {"THIS MORNING", "THIS AFTERNOON", "TONIGHT"};
@@ -446,6 +447,7 @@ final class Recs {
         p.kind = kind;
         p.title = o.optString(kind.equals("movie") ? "title" : "name");
         p.backdrop = backdrop;
+        p.rating = (float) o.optDouble("vote_average", 0);
         list.add(p);
     }
 
@@ -640,7 +642,7 @@ final class Recs {
             for (Pick p : picks) {
                 a.put(new JSONObject().put("id", p.id).put("kind", p.kind).put("title", p.title).put("backdrop", p.backdrop)
                         .put("meta", p.meta).put("app", p.app == null ? "" : p.app).put("pkg", p.pkg == null ? "" : p.pkg)
-                        .put("detailed", p.detailed));
+                        .put("detailed", p.detailed).put("rating", p.rating));
             }
             cache.edit().putString("picks", a.toString()).putInt("period", period).putLong("listAt", listAt)
                     .putString("language", listLanguage)
@@ -663,6 +665,7 @@ final class Recs {
             p.app = o.optString("app").isEmpty() ? null : o.optString("app");
             p.pkg = o.optString("pkg").isEmpty() ? null : o.optString("pkg");
             p.detailed = o.optBoolean("detailed");
+            p.rating = (float) o.optDouble("rating", 0);
             out.add(p);
         }
         return out;
