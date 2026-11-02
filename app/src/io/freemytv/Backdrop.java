@@ -22,6 +22,8 @@ import android.graphics.Shader;
  * The final image lives only in GPU memory (HARDWARE): drawing it costs one texture, and the process doesn't hold 8 MB.
  */
 final class Backdrop {
+    /** Average brightness (0 to 1) above which a picture counts as "white". */
+    private static final float PALE_LUMINANCE = 0.62f;
     static final int W = 1920, H = 1080, FW = 192, FH = 108, GW = 480, GH = 270;
     /** The cards at their focused size (1.05×): the wide one and the two tall ones. */
     static final int WIDE_W = 1092, WIDE_H = 464, TALL_W = 336, TALL_H = 464;
@@ -34,9 +36,11 @@ final class Backdrop {
     final int[] nightFrost, nightGlass; // at night: frosted (the bottom drawer's frosted glass) and glass, darkened
     final Bitmap nightImage;            // at night: the background (the darkened frosted version)
     final int tint;                     // the photo's dominant color, vivid (the ambient glow behind the cards)
+    final boolean pale;                 // mostly white: as a poster it looks empty, so the home screen skips it
 
     private Backdrop(Bitmap image, int[] frost, int[] glass, Bitmap wide, Bitmap tall, int[] light, int[] lightGlass,
-                     int[] night, int[] nightGlass) {
+                     int[] night, int[] nightGlass, boolean pale) {
+        this.pale = pale;
         this.image = image;
         this.frost = frost;
         this.glass = glass;
@@ -80,8 +84,9 @@ final class Backdrop {
             int[] lightGlass = whiten(glass.clone(), 0.74f);
             int[] night = darken(frost.clone(), 0.76f);
             int[] nightGlass = darken(glass, 0.56f);
+            boolean pale = luminance(out, 0, 0, 1, 1) > PALE_LUMINANCE;
             out.recycle();
-            return new Backdrop(null, frost, null, wide, tall, light, lightGlass, night, nightGlass);
+            return new Backdrop(null, frost, null, wide, tall, light, lightGlass, night, nightGlass, pale);
         }
 
         float boost = Math.max(0, Math.min(0.3f, (luminance(out, 0, 0.22f, 0.5f, 0.62f) - 0.22f) * 1.1f));
@@ -108,7 +113,7 @@ final class Backdrop {
 
         int[] frost = reduce(out, FW, FH, 3, 3);
         int[] glass = reduce(out, GW, GH, 2, 2);
-        return new Backdrop(gpu(out), frost, glass, null, null, null, null, null, null);
+        return new Backdrop(gpu(out), frost, glass, null, null, null, null, null, null, false);
     }
 
     /** How many times smaller the screensaver photo's frosted version is (the glass math uses the same number). */

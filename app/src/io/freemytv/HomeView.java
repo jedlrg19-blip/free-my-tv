@@ -2340,6 +2340,13 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             java.util.Set<String> seen = new java.util.HashSet<>();
             for (Recs.Pick q : all) seen.add(Recs.key(q));
             for (Recs.Pick q : recs.wanted()) if (seen.add(Recs.key(q))) all.add(q);
+            // Skip posters that are mostly white (they look empty), once their picture is known; keep at least five.
+            List<Recs.Pick> kept = new ArrayList<>();
+            for (Recs.Pick q : all) {
+                Backdrop qb = recs.backdrop(q);
+                if (qb == null || !qb.pale) kept.add(q);
+            }
+            if (kept.size() >= CARDS_MAX) all = kept;
         }
         List<Recs.Pick> list = all;
         if (all.size() > CARDS_MAX) {   // more picks than slots: the row shows a window that turns with rowShift
@@ -2460,14 +2467,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         int[] tints = {0xFFFFFFFF, 0xFFCFD8FF, 0xFFFFD0EC, 0xFFBFEFFF};
         for (int i = 0; i < 260; i++) {
             float sx = rnd.nextFloat() * aw, sy = rnd.nextFloat() * ah;
-            boolean big = i % 13 == 0;
-            float sr = big ? 2.2f + rnd.nextFloat() * 1.4f : 0.9f + rnd.nextFloat() * 1.0f;
+            boolean big = i % 13 == 0;   // a few slightly larger points, no halos (they read as blurry blue lights)
+            float sr = big ? 1.5f + rnd.nextFloat() * 0.8f : 0.9f + rnd.nextFloat() * 1.0f;
             int tint = tints[rnd.nextInt(tints.length)];
-            if (big) {
-                pt.setShader(new android.graphics.RadialGradient(sx, sy, sr * 5, Ui.alpha(tint, 0.45f), tint & 0x00FFFFFF, Shader.TileMode.CLAMP));
-                ac.drawCircle(sx, sy, sr * 5, pt);
-                pt.setShader(null);
-            }
             pt.setColor(Ui.alpha(tint, big ? 1f : 0.45f + rnd.nextFloat() * 0.5f));
             ac.drawCircle(sx, sy, sr, pt);
         }
