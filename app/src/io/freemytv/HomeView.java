@@ -173,6 +173,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         GLOW_COLOR.put("add-apps", 0xB05BFF);
     }
     private static final int GLOW_DEFAULT = 0x8FA3C7;
+    /** A unit radial gradient (white fading out), tinted with the poster's color through a color filter. */
+    private android.graphics.RadialGradient ambientShader;
+    private final Map<Integer, android.graphics.PorterDuffColorFilter> ambientFilters = new HashMap<>();
+    private final Matrix ambientMatrix = new Matrix();
+    private final Paint ambientPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private static final int[][] PLACEHOLDER_ART = {{0xFF4B2BD8, 0xFF0E1B4D}, {0xFF00A7B5, 0xFF0B2A4A}, {0xFFE0457B, 0xFF3B1450}};
     private final Map<Integer, android.graphics.RadialGradient> glowShaders = new HashMap<>();
     private final Matrix glowMatrix = new Matrix();
@@ -307,16 +312,20 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     };
 
     /**
-     * The cards are not frozen: while the remote is untouched, the home screen moves on by itself to the next tab (Explore,
-     * Movies, Shows), so the three posters and the background change every ROTATE_MS. Any key press pauses it.
+     * The posters are not frozen: while the remote is untouched, the row turns through this hour's picks (two new ones
+     * slide in every ROTATE_MS) and the background follows. Any key press pauses it.
      */
     private static final long ROTATE_MS = 12_000;
     private long lastKeyAt = SystemClock.uptimeMillis();
+    private int rowShift;   // how far the row of posters has turned through this hour's picks
     private final Runnable rotate = new Runnable() {
         @Override public void run() {
             if (!running) return;
             boolean idle = SystemClock.uptimeMillis() - lastKeyAt >= ROTATE_MS;
-            if (idle && zone == Z_SHELF && !drawerOpen && !sheetOpen && !cards.isEmpty()) selectTab((tab + 1) % 3);
+            if (idle && zone == Z_SHELF && !drawerOpen && !sheetOpen && !cards.isEmpty()) {
+                rowShift += 2;   // two new posters slide in, three stay
+                updateCards();
+            }
             handler.postDelayed(this, ROTATE_MS);
         }
     };
@@ -2264,11 +2273,16 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /** The three cards of the current tab (Explore, Movies, Shows) and the background taken from the first one. */
     private void updateCards() {
-        List<Recs.Pick> list = new ArrayList<>(recs.now(TAB_KIND[tab]));   // this tab's picks lead the row
-        if (!list.isEmpty()) {
+        List<Recs.Pick> all = new ArrayList<>(recs.now(TAB_KIND[tab]));   // this tab's picks lead
+        if (!all.isEmpty()) {
             java.util.Set<String> seen = new java.util.HashSet<>();
-            for (Recs.Pick q : list) seen.add(Recs.key(q));
-            for (Recs.Pick q : recs.wanted()) if (list.size() < CARDS_MAX && seen.add(Recs.key(q))) list.add(q);
+            for (Recs.Pick q : all) seen.add(Recs.key(q));
+            for (Recs.Pick q : recs.wanted()) if (seen.add(Recs.key(q))) all.add(q);
+        }
+        List<Recs.Pick> list = all;
+        if (all.size() > CARDS_MAX) {   // more picks than slots: the row shows a window that turns with rowShift
+            list = new ArrayList<>();
+            for (int i = 0; i < CARDS_MAX; i++) list.add(all.get(Math.floorMod(rowShift + i, all.size())));
         }
         if (!samePicks(list, cards)) {
             cards = list;
@@ -2280,7 +2294,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             }
         }
         for (Recs.Pick p : recs.wanted()) recs.backdrop(p);   // all three tabs preloaded: switching tabs is instant
-        Backdrop b = cards.isEmpty() ? null : recs.backdrop(cards.get(zone == Z_CARDS ? Math.min(cardIndex, cards.size() - 1) : 0));
+        Backdrop b = cards.isEmpty() ? null : recs.backdrop(cards.get(zone == Z_CARDS ? Math.min(cardIndex, cards.size() - 1) : Math.min(2, cards.size() - 1)));
         if (cards.isEmpty() || b != null) showBackdrop(b);
         heroDirty = true;
         spoken.focusMoved();    // new picks under the focused card
@@ -2289,6 +2303,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private void selectTab(int index) {
         if (index == tab) return;
         tab = index;
+        rowShift = 0;
         updateCards();
         heroDirty = true;
     }
@@ -2358,6 +2373,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (bgTo != null) drawLightImage(c, bgTo, fading ? e : 1);
         imagePaint.setColorFilter(null);
         if (night > 0.001f) {
+            if (fading && bgFrom != null) drawAmbient(c, bgFrom.tint, (bgTo == null ? 1 - e : 1) * night);
+            if (bgTo != null) drawAmbient(c, bgTo.tint, (fading ? e : 1) * night);
+        }
+        if (night > 0.001f) {
             if (starsArt == null) starsArt = paintStars();
             artPaint.setColorFilter(v);
             artPaint.setAlpha(Math.round(255 * night));
@@ -2391,6 +2410,26 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             ac.drawCircle(sx, sy, sr, pt);
         }
         return art;
+    }
+
+    /** A wide soft glow of the poster's color over the middle of the screen, so each poster gives the room its own light. */
+    private void drawAmbient(Canvas c, int rgb, float alpha) {
+        if (alpha <= 0.01f || rgb == 0) return;
+        if (ambientShader == null) ambientShader = new android.graphics.RadialGradient(0, 0, 1, 0xFFFFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP);
+        android.graphics.PorterDuffColorFilter f = ambientFilters.get(rgb);
+        if (f == null) {
+            f = new android.graphics.PorterDuffColorFilter(0xFF000000 | rgb, android.graphics.PorterDuff.Mode.SRC_IN);
+            ambientFilters.put(rgb, f);
+        }
+        ambientMatrix.setScale(w * 0.75f, h * 0.8f);
+        ambientMatrix.postTranslate(w * 0.5f, h * 0.42f);
+        ambientShader.setLocalMatrix(ambientMatrix);
+        ambientPaint.setShader(ambientShader);
+        ambientPaint.setColorFilter(f);
+        ambientPaint.setAlpha(Math.round(255 * 0.55f * Ui.clamp(alpha)));
+        c.drawRect(screen, ambientPaint);
+        ambientPaint.setShader(null);
+        ambientPaint.setColorFilter(null);
     }
 
     private void drawNightArt(Canvas c, android.graphics.ColorFilter v) {

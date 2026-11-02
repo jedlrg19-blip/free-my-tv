@@ -33,6 +33,7 @@ final class Backdrop {
     final Bitmap lightImage;            // by day: the background (the lightened frosted version, scaled up on screen)
     final int[] nightFrost, nightGlass; // at night: frosted (the bottom drawer's frosted glass) and glass, darkened
     final Bitmap nightImage;            // at night: the background (the darkened frosted version)
+    final int tint;                     // the photo's dominant color, vivid (the ambient glow behind the cards)
 
     private Backdrop(Bitmap image, int[] frost, int[] glass, Bitmap wide, Bitmap tall, int[] light, int[] lightGlass,
                      int[] night, int[] nightGlass) {
@@ -47,6 +48,19 @@ final class Backdrop {
         this.nightGlass = nightGlass;
         lightImage = light == null ? null : Bitmap.createBitmap(light, FW, FH, Bitmap.Config.ARGB_8888);
         nightImage = night == null ? null : Bitmap.createBitmap(night, FW, FH, Bitmap.Config.ARGB_8888);
+        tint = frost == null ? 0 : tintOf(frost);
+    }
+
+    /** The average color of the frosted photo, pushed toward a vivid version of its hue. */
+    private static int tintOf(int[] px) {
+        long r = 0, g = 0, b = 0;
+        for (int p : px) { r += (p >> 16) & 255; g += (p >> 8) & 255; b += p & 255; }
+        int n = Math.max(1, px.length);
+        float[] hsv = new float[3];
+        android.graphics.Color.RGBToHSV((int) (r / n), (int) (g / n), (int) (b / n), hsv);
+        hsv[1] = Math.min(1f, hsv[1] * 1.5f + 0.25f);
+        hsv[2] = 0.95f;
+        return android.graphics.Color.HSVToColor(hsv) & 0x00FFFFFF;
     }
 
     static Backdrop make(Bitmap src, boolean forLight) {
