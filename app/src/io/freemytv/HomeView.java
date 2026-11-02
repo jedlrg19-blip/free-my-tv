@@ -81,6 +81,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private static final int SMOKE = 0xFF111113, INK = 0xFF1C1C1E, WHITE = 0xFFF5F5F7;
     private static final int UP_COLOR = 0xFF30D158, DOWN_COLOR = 0xFFFF453A;
     private static final long TOAST_MS = 6000, FADE_MS = 800;
+    /** The background follows the focused poster: a quicker cross-fade than the other fades (800 ms felt slow). */
+    private static final float BG_FADE_MS = 320;
     /** Blur radii of the shadow and shadowDeep paints (Shadows needs them to draw the same blur on older TVs). */
     private static final float SHADOW_BLUR = 26, DEEP_BLUR = 30;
     private static final int SKY = 0, HERO = 1, STATUS = 2, PLATTER = 3, TILES = 4, DRAWER = 5, SHEET = 6, TOAST = 7;
@@ -802,7 +804,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (b == bgTo) return;
         long up = SystemClock.uptimeMillis();
         // In the middle of another swap, start from whichever is more visible.
-        if (bgFadeAt == 0 || fadeEase(bgFadeAt, up) >= 0.5f) bgFrom = bgTo;
+        if (bgFadeAt == 0 || fadeEase(bgFadeAt, up, BG_FADE_MS) >= 0.5f) bgFrom = bgTo;
         bgTo = b;
         bgFadeAt = up;
         nightPair = false;
@@ -924,7 +926,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private boolean tickBackgroundFade(long up) {
         if (bgFadeAt == 0) return false;
-        float e = fadeEase(bgFadeAt, up);
+        float e = fadeEase(bgFadeAt, up, BG_FADE_MS);
         if (bgTo != null && bgFrom != null && glassOf(bgFrom) != null && glassOf(bgTo) != null) {
             int[] from = frostOf(bgFrom), to = frostOf(bgTo);
             for (int i = 0; i < frostMix.length; i++) frostMix[i] = mix(from[i], to[i], e);
@@ -2350,7 +2352,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private void drawLightSky(Canvas c) {
         long up = SystemClock.uptimeMillis();
-        float e = bgFadeAt == 0 ? 1 : fadeEase(bgFadeAt, up);
+        float e = bgFadeAt == 0 ? 1 : fadeEase(bgFadeAt, up, BG_FADE_MS);
         boolean fading = bgFadeAt != 0;
         // Drawer open: the background lightens (by day) or darkens (at night), as a filter on the drawing itself.
         android.graphics.ColorFilter v = veil(tone(0.32f, 0.42f) * Ui.clamp(drawer.value), blend(0xFFFFFFFF, 0xFF000000, night));
