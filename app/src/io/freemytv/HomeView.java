@@ -1240,7 +1240,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         tmp.set(-bw / 2, -bh / 2, bw / 2, bh / 2);
         tmp.offset(0, (4 + 14 * f) * k);
         shadowDeep.setColor(Ui.alpha(0xFF000000, tone(0.14f, 0.3f) + tone(0.18f, 0.3f) * fc));
-        shadows.draw(c, tmp, r0, DEEP_BLUR * k, shadowDeep);
+        if (!"add-slot".equals(it.key)) shadows.draw(c, tmp, r0, DEEP_BLUR * k, shadowDeep);
         c.restore();
         int[] style = TILE_STYLE.get(it.key);
         if (it.logo != null && style != null) {
@@ -2281,6 +2281,21 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                     Ui.alpha(b[0], b[5] / 100f), b[0] & 0x00FFFFFF, Shader.TileMode.CLAMP));
             ac.drawRect(0, 0, aw, ah, pt);
         }
+        // Aurora: soft ribbons of light sweeping from the bottom to the top right, painted once and blurred.
+        Paint rb = new Paint(Paint.ANTI_ALIAS_FLAG);
+        rb.setStyle(Paint.Style.STROKE);
+        rb.setStrokeCap(Paint.Cap.ROUND);
+        int[][] ribbons = {{0xFFFF2DA8, 0xFF6A3DFF, 16, 52, 38}, {0xFF6A3DFF, 0xFF2D7BFF, 11, 34, 30}, {0xFF2D7BFF, 0xFFB04DFF, 7, 60, 26}, {0xFFFF5CC8, 0xFF7B4DFF, 4, 44, 34}};
+        for (int[] r : ribbons) {
+            float off = aw * (r[3] - 50) / 100f;
+            Path ph = new Path();
+            ph.moveTo(aw * 0.30f + off, ah * 1.08f);
+            ph.cubicTo(aw * 0.52f + off, ah * 0.62f, aw * 0.70f + off, ah * 0.92f, aw * 1.06f, ah * 0.08f);
+            rb.setStrokeWidth(aw * r[2] / 100f * 0.5f);
+            rb.setShader(new LinearGradient(aw * 0.3f, ah, aw, 0, Ui.alpha(r[0], r[4] / 100f), Ui.alpha(r[1], r[4] / 100f * 0.8f), Shader.TileMode.CLAMP));
+            rb.setMaskFilter(new BlurMaskFilter(Math.max(6, aw * 0.012f), BlurMaskFilter.Blur.NORMAL));
+            ac.drawPath(ph, rb);
+        }
         // Stars: a fixed seed so the sky is the same every time. Mostly tiny and dim, a few bigger with a soft halo.
         java.util.Random rnd = new java.util.Random(27);
         int[] tints = {0xFFFFFFFF, 0xFFCFD8FF, 0xFFFFD0EC, 0xFFBFEFFF};
@@ -2341,6 +2356,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         String hello = Config.NAME.isEmpty() ? Ui.tr("Para você", "For You")
                 : Ui.tr("Olá, " + Config.NAME + "!", "Hello, " + Config.NAME + "!", "¡Hola, " + Config.NAME + "!");
         c.drawText(hello, MARGIN * k - Ui.leftBearing(lTitle, hello), L_TITLE_BASE * k, lTitle);
+        if (!Config.NAME.isEmpty()) {
+            String sub = Ui.tr("Descubra algo novo hoje", "Discover something new today", "Descubre algo nuevo hoy");
+            c.drawText(sub, MARGIN * k + lTitle.measureText(hello) + 36 * k, L_TITLE_BASE * k, lTab);
+        }
         // Text tabs (the selected one in bold, in the main text color); with focus on the tabs, the selected one gets
         // the white pill with a shadow and grows a little (the tvOS focus).
         float focus = Ui.clamp(topFocus[tab].value);

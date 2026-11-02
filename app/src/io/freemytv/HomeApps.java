@@ -150,6 +150,8 @@ final class HomeApps {
             }
             items.add(it);
         }
+        // Room left on the shelf: one dashed "+ Add app" slot (as in the design), then the solid "Add more" tile.
+        if (items.size() < MAX_SHELF) items.add(addSlotItem());
         items.add(addAppsItem());
         return items;
     }
@@ -158,9 +160,42 @@ final class HomeApps {
         Item it = new Item();
         it.kind = ADD_APPS;
         it.key = "add-apps";
-        it.label = Ui.tr("Adicionar apps", "Add apps", "Añadir apps");
+        it.label = Ui.tr("Adicionar mais", "Add more", "Añadir más");
         it.tile = plusTile(it.label);
         return it;
+    }
+
+    private static Item addSlotItem() {
+        Item it = new Item();
+        it.kind = ADD_APPS;
+        it.key = "add-slot";
+        it.label = Ui.tr("Adicionar app", "Add app", "Añadir app");
+        it.tile = dashedTile(it.label);
+        return it;
+    }
+
+    /** An empty slot: a dashed outline with a plus and the label, on a transparent card (drawn once). */
+    private static synchronized Bitmap dashedTile(String label) {
+        Bitmap b = TILES.get("add-slot|" + label);
+        if (b != null) return b;
+        b = Bitmap.createBitmap(TILE_W, TILE_H, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(b);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(5);
+        p.setColor(0x99FFFFFF);
+        p.setPathEffect(new android.graphics.DashPathEffect(new float[] {22, 16}, 0));
+        c.drawRoundRect(new RectF(6, 6, TILE_W - 6, TILE_H - 6), 30, 30, p);
+        p.setPathEffect(null);
+        p.setStrokeCap(Paint.Cap.ROUND);
+        p.setStrokeWidth(8);
+        float cx = TILE_W / 2f, cy = TILE_H * 0.40f, a = 24;
+        c.drawLine(cx - a, cy, cx + a, cy, p);
+        c.drawLine(cx, cy - a, cx, cy + a, p);
+        Paint t = Ui.text(Ui.medium, 30, 0xCCFFFFFF);
+        c.drawText(label, cx - t.measureText(label) / 2, TILE_H * 0.82f, t);
+        TILES.put("add-slot|" + label, b);
+        return b;
     }
 
     /** "+ Add apps": a violet to magenta gradient with a plus and the label (drawn once, like the other cards). */
