@@ -127,6 +127,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private final int[] neutralGlassPx = new int[Backdrop.GW * Backdrop.GH], neutralFrostPx = new int[Backdrop.FW * Backdrop.FH];
     private boolean nightPair;          // the glass holds both photos (day and night), blended by `night`
     private Shader nightGradient;
+    private Bitmap nightArt;        // the signature night background, painted once (no photo behind it)
+    private final Paint artPaint = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG);
 
     // At the top: tabs (0 to 2) and icon-only buttons (3 to 5); the three cards
     private int tab, topIndex, cardIndex;
@@ -164,6 +166,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         GLOW_COLOR.put("paramount", 0x0064FF); GLOW_COLOR.put("peacock", 0x6E55DC); GLOW_COLOR.put("globoplay", 0xFF5A1F);
     }
     private static final int GLOW_DEFAULT = 0x8FA3C7;
+    private static final int[][] PLACEHOLDER_ART = {{0xFF4B2BD8, 0xFF0E1B4D}, {0xFF00A7B5, 0xFF0B2A4A}, {0xFFE0457B, 0xFF3B1450}};
     private final Map<Integer, android.graphics.RadialGradient> glowShaders = new HashMap<>();
     private final Matrix glowMatrix = new Matrix();
     private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -531,6 +534,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         lTip = Ui.text(Ui.semibold, 25 * k, L_INK);
         lTip.setTextAlign(Paint.Align.CENTER);
         lightGradient = null;
+        nightArt = null;
         buttonPaint = Ui.text(Ui.semibold, 29 * k, INK);
         capsuleText = Ui.numbers(Ui.medium, 29 * k, 0xF2FFFFFF);
         tipPaint = Ui.text(Ui.semibold, 25 * k, 0xF2FFFFFF);
@@ -2230,6 +2234,27 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
      * Background: the first card's photo, heavily blurred and almost white; without it, a light gradient. At night, the
      * same photo almost black (or a dark gradient), drawn on top during the transition.
      */
+    /**
+     * The signature background: deep navy with a violet bloom at the top left, teal at the bottom right and a touch of
+     * magenta at the top right. Painted once at half size (smooth gradients scale up cleanly), so it costs nothing per frame.
+     */
+    private Bitmap paintNightArt() {
+        int aw = Math.max(16, (int) screen.width() / 2), ah = Math.max(16, (int) screen.height() / 2);
+        Bitmap art = Bitmap.createBitmap(aw, ah, Bitmap.Config.ARGB_8888);
+        Canvas ac = new Canvas(art);
+        Paint pt = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+        pt.setShader(new LinearGradient(0, 0, 0, ah, 0xFF070B1A, 0xFF100A2A, Shader.TileMode.CLAMP));
+        ac.drawRect(0, 0, aw, ah, pt);
+        int[][] blooms = {{0xFF5B2BFF, 0x0, 18, 12, 62, 46}, {0xFF00D4C8, 0x0, 88, 92, 58, 34}, {0xFFFF3D7F, 0x0, 78, 6, 40, 22}};
+        for (int[] b : blooms) {
+            float r = Math.max(aw, ah) * b[4] / 100f;
+            pt.setShader(new android.graphics.RadialGradient(aw * b[2] / 100f, ah * b[3] / 100f, r,
+                    Ui.alpha(b[0], b[5] / 100f), b[0] & 0x00FFFFFF, Shader.TileMode.CLAMP));
+            ac.drawRect(0, 0, aw, ah, pt);
+        }
+        return art;
+    }
+
     private void drawLightSky(Canvas c) {
         long up = SystemClock.uptimeMillis();
         float e = bgFadeAt == 0 ? 1 : fadeEase(bgFadeAt, up);
@@ -2245,10 +2270,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 c.drawRect(screen, fill);
             }
             if (night > 0.001f) {
-                fill.setShader(nightGradient);
-                fill.setAlpha(Math.round(255 * night));
-                c.drawRect(screen, fill);
-                fill.setAlpha(255);
+                if (nightArt == null) nightArt = paintNightArt();
+                artPaint.setColorFilter(v);
+                artPaint.setAlpha(Math.round(255 * night));
+                c.drawBitmap(nightArt, null, screen, artPaint);
+                artPaint.setColorFilter(null);
             }
             fill.setShader(null);
             fill.setColorFilter(null);
@@ -2325,9 +2351,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (img != null) {
             roundImage(c, img, cell, r);
         } else {
-            fill.setShader(null);
-            fill.setColor(tone(0xFFDADADF, 0xFF2C2C2E));
+            // No picture yet (no TMDB key, or still loading): a tinted gradient of the signature palette, not a gray slab.
+            int[] art = PLACEHOLDER_ART[i % PLACEHOLDER_ART.length];
+            fill.setShader(new LinearGradient(cell.left, cell.top, cell.right, cell.bottom, art[0], art[1], Shader.TileMode.CLAMP));
             c.drawRoundRect(cell, r, r, fill);
+            fill.setShader(null);
         }
         if (f > 0.01f) {
             sheen.setShader(new LinearGradient(cell.left, cell.top, cell.left + cell.width() * 0.5f, cell.bottom,
