@@ -1322,12 +1322,17 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     }
 
     private void roundImage(Canvas c, Bitmap image, RectF cell, float r) {
+        roundImage(c, image, cell, r, false);
+    }
+
+    /** `cover`: keep the picture's shape and crop it to fill the card (posters); otherwise it is stretched to the card. */
+    private void roundImage(Canvas c, Bitmap image, RectF cell, float r, boolean cover) {
         if (!Ui.LEGACY) {
             clip.reset();
             clip.addRoundRect(cell, r, r, Path.Direction.CW);
             c.save();
             c.clipPath(clip);
-            c.drawBitmap(image, coverCrop(image, cell), cell, bitmapPaint);
+            c.drawBitmap(image, cover ? coverCrop(image, cell) : null, cell, bitmapPaint);
             c.restore();
             return;
         }
@@ -1336,9 +1341,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             shader = new BitmapShader(image, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
             imageShaders.put(image, shader);
         }
-        float cover = Math.max(cell.width() / image.getWidth(), cell.height() / image.getHeight());
-        imageMatrix.setScale(cover, cover);
-        imageMatrix.postTranslate(cell.left - (image.getWidth() * cover - cell.width()) / 2, cell.top - (image.getHeight() * cover - cell.height()) / 2);
+        if (cover) {
+            float fit = Math.max(cell.width() / image.getWidth(), cell.height() / image.getHeight());
+            imageMatrix.setScale(fit, fit);
+            imageMatrix.postTranslate(cell.left - (image.getWidth() * fit - cell.width()) / 2, cell.top - (image.getHeight() * fit - cell.height()) / 2);
+        } else {
+            imageMatrix.setScale(cell.width() / image.getWidth(), cell.height() / image.getHeight());
+            imageMatrix.postTranslate(cell.left, cell.top);
+        }
         shader.setLocalMatrix(imageMatrix);
         imageFill.setShader(shader);
         c.drawRoundRect(cell, r, r, imageFill);
@@ -2635,7 +2645,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         Backdrop b = p == null ? null : recs.backdrop(p);
         Bitmap img = b == null ? null : b.tall;   // the posters are all tall (the wide crop is no longer used)
         if (img != null) {
-            roundImage(c, img, cell, r);
+            roundImage(c, img, cell, r, true);
         } else {
             // No picture yet (no TMDB key, or still loading): a tinted gradient of the signature palette, not a gray slab.
             int[] art = PLACEHOLDER_ART[i % PLACEHOLDER_ART.length];
