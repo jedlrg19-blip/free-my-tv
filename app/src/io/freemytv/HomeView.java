@@ -2368,7 +2368,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             String deg = HomeData.degrees(wx.temp);
             c.drawText(deg, x - Ui.leftBearing(infoTemp, deg), y + 190 * k, infoTemp);
             Symbols.draw(getContext(), c, Symbols.weather(wx.code, wx.isDay), b.right - pad - 30 * k, y + 150 * k, 56 * k, 0xFFFFFFFF);
-            c.drawText(HomeData.condition(wx.code, wx.isDay), x, y + 262 * k, infoMid);
+            // The narrow card: a long condition ("Mayormente despejado") is cut with an ellipsis instead of running under the next card.
+            String cond = TextUtils.ellipsize(HomeData.condition(wx.code, wx.isDay), new TextPaint(infoMid), b.width() - 2 * pad, TextUtils.TruncateAt.END).toString();
+            c.drawText(cond, x, y + 262 * k, infoMid);
             c.drawText(Ui.en ? "H:" + HomeData.degrees(wx.max) + "  L:" + HomeData.degrees(wx.min)
                     : "Máx. " + HomeData.degrees(wx.max) + "  Mín. " + HomeData.degrees(wx.min), x, y + 308 * k, infoDim);
         } else {
