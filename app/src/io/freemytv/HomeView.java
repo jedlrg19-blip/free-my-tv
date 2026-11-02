@@ -127,6 +127,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private final int[] neutralGlassPx = new int[Backdrop.GW * Backdrop.GH], neutralFrostPx = new int[Backdrop.FW * Backdrop.FH];
     private boolean nightPair;          // the glass holds both photos (day and night), blended by `night`
     private Shader nightGradient;
+    private Bitmap starsArt;        // the stars, on top of the background photo
     private Bitmap nightArt;        // the signature night background, painted once (no photo behind it)
     private final Paint artPaint = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG);
 
@@ -563,6 +564,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         infoMid = Ui.text(Ui.medium, 36 * k, 0xFFFFFFFF);
         infoDim = Ui.text(Ui.regular, 28 * k, 0xB3FFFFFF);
         nightArt = null;
+        starsArt = null;
         buttonPaint = Ui.text(Ui.semibold, 29 * k, INK);
         capsuleText = Ui.numbers(Ui.medium, 29 * k, 0xF2FFFFFF);
         tipPaint = Ui.text(Ui.semibold, 25 * k, 0xF2FFFFFF);
@@ -2296,23 +2298,6 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             rb.setMaskFilter(new BlurMaskFilter(Math.max(6, aw * 0.012f), BlurMaskFilter.Blur.NORMAL));
             ac.drawPath(ph, rb);
         }
-        // Stars: a fixed seed so the sky is the same every time. Mostly tiny and dim, a few bigger with a soft halo.
-        java.util.Random rnd = new java.util.Random(27);
-        int[] tints = {0xFFFFFFFF, 0xFFCFD8FF, 0xFFFFD0EC, 0xFFBFEFFF};
-        pt.setShader(null);
-        for (int i = 0; i < 170; i++) {
-            float sx = rnd.nextFloat() * aw, sy = rnd.nextFloat() * ah;
-            boolean big = i % 17 == 0;
-            float sr = big ? 1.8f + rnd.nextFloat() * 1.2f : 0.5f + rnd.nextFloat() * 0.9f;
-            int tint = tints[rnd.nextInt(tints.length)];
-            if (big) {
-                pt.setShader(new android.graphics.RadialGradient(sx, sy, sr * 5, Ui.alpha(tint, 0.35f), tint & 0x00FFFFFF, Shader.TileMode.CLAMP));
-                ac.drawCircle(sx, sy, sr * 5, pt);
-                pt.setShader(null);
-            }
-            pt.setColor(Ui.alpha(tint, big ? 0.95f : 0.25f + rnd.nextFloat() * 0.5f));
-            ac.drawCircle(sx, sy, sr, pt);
-        }
         return art;
     }
 
@@ -2340,6 +2325,40 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (fading && bgFrom != null) drawLightImage(c, bgFrom, bgTo == null ? 1 - e : 1);
         if (bgTo != null) drawLightImage(c, bgTo, fading ? e : 1);
         imagePaint.setColorFilter(null);
+        if (night > 0.001f) {
+            if (starsArt == null) starsArt = paintStars();
+            artPaint.setColorFilter(v);
+            artPaint.setAlpha(Math.round(255 * night));
+            c.drawBitmap(starsArt, null, screen, artPaint);
+            artPaint.setColorFilter(null);
+        }
+    }
+
+    /**
+     * The stars, on a transparent bitmap drawn on top of the background photo (under the photo they got dimmed to
+     * nothing). A fixed seed so the sky is the same every time; mostly small, a few big ones with a soft halo.
+     */
+    private Bitmap paintStars() {
+        int aw = Math.max(16, (int) screen.width() / 2), ah = Math.max(16, (int) screen.height() / 2);
+        Bitmap art = Bitmap.createBitmap(aw, ah, Bitmap.Config.ARGB_8888);
+        Canvas ac = new Canvas(art);
+        Paint pt = new Paint(Paint.ANTI_ALIAS_FLAG);
+        java.util.Random rnd = new java.util.Random(27);
+        int[] tints = {0xFFFFFFFF, 0xFFCFD8FF, 0xFFFFD0EC, 0xFFBFEFFF};
+        for (int i = 0; i < 260; i++) {
+            float sx = rnd.nextFloat() * aw, sy = rnd.nextFloat() * ah;
+            boolean big = i % 13 == 0;
+            float sr = big ? 2.2f + rnd.nextFloat() * 1.4f : 0.9f + rnd.nextFloat() * 1.0f;
+            int tint = tints[rnd.nextInt(tints.length)];
+            if (big) {
+                pt.setShader(new android.graphics.RadialGradient(sx, sy, sr * 5, Ui.alpha(tint, 0.45f), tint & 0x00FFFFFF, Shader.TileMode.CLAMP));
+                ac.drawCircle(sx, sy, sr * 5, pt);
+                pt.setShader(null);
+            }
+            pt.setColor(Ui.alpha(tint, big ? 1f : 0.45f + rnd.nextFloat() * 0.5f));
+            ac.drawCircle(sx, sy, sr, pt);
+        }
+        return art;
     }
 
     private void drawNightArt(Canvas c, android.graphics.ColorFilter v) {
