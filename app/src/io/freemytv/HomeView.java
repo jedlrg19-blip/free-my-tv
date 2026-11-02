@@ -303,6 +303,21 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         @Override public void onInputRemoved(String inputId) { reload(); }
     };
 
+    /**
+     * The cards are not frozen: while the remote is untouched, the home screen moves on by itself to the next tab (Explore,
+     * Movies, Shows), so the three posters and the background change every ROTATE_MS. Any key press pauses it.
+     */
+    private static final long ROTATE_MS = 12_000;
+    private long lastKeyAt = SystemClock.uptimeMillis();
+    private final Runnable rotate = new Runnable() {
+        @Override public void run() {
+            if (!running) return;
+            boolean idle = SystemClock.uptimeMillis() - lastKeyAt >= ROTATE_MS;
+            if (idle && zone == Z_SHELF && !drawerOpen && !sheetOpen && !cards.isEmpty()) selectTab((tab + 1) % 3);
+            handler.postDelayed(this, ROTATE_MS);
+        }
+    };
+
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             if (!running) return;
@@ -379,6 +394,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         recs.refreshIfStale();
         if (tvInputs != null) tvInputs.registerCallback(inputCallback, handler);
         handler.postDelayed(tick, 15_000);
+        lastKeyAt = SystemClock.uptimeMillis();
+        handler.postDelayed(rotate, ROTATE_MS);
         checkNotices();
         reload();
         updatePalette();
@@ -396,6 +413,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         running = false;
         Choreographer.getInstance().removeFrameCallback(this);
         handler.removeCallbacks(tick);
+        handler.removeCallbacks(rotate);
         data.removeListener(this);
         recs.removeListener(this);
         if (tvInputs != null) tvInputs.unregisterCallback(inputCallback);
@@ -1822,6 +1840,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     // MARK: - Keys: only the arrows, OK and Back (system keys pass through to the system)
 
     boolean onKey(KeyEvent e) {
+        lastKeyAt = SystemClock.uptimeMillis();
         boolean down = e.getAction() == KeyEvent.ACTION_DOWN;
         switch (e.getKeyCode()) {
             case KeyEvent.KEYCODE_DPAD_LEFT:
