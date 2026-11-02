@@ -98,7 +98,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private static final String[] TABS_EN = {"Explore", "Movies", "Shows"};
     private static final String[] TABS_ES = {"Explorar", "Películas", "Series"};
     private static final String[] TAB_KIND = {null, "movie", "tv"};
-    private static final int Z_TOP = 4, Z_CARDS = 5;
+    private static final int Z_TOP = 4, Z_CARDS = 5, Z_SIDE = 6;
+    /** The side menu (Home, Movies, Shows, Customize, Settings) and where the content starts to its right. */
+    private static final float SIDE_X = 60, SIDE_W = 300, SIDE_ITEM_H = 78, SIDE_GAP = 8, SIDE_TOP = 250, CONTENT_L = 420;
+    private static final int SIDE_N = 5;
 
     private final Activity activity;
     private final Scene scene = new Scene();
@@ -140,6 +143,12 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private final RectF[] topRects = new RectF[6];
     /** The row of posters: up to five tall cards (three tall-and-wide cards while there are no picks yet). */
     private static final int CARDS_MAX = 5;
+    private final Spring[] sideFocus = new Spring[SIDE_N];
+    private final RectF[] sideRects = new RectF[SIDE_N];
+    private final List<HomeApps.Item> sideItems = new ArrayList<>();   // Customize and Settings (the last two entries)
+    private int sideIndex;
+    private Paint sideOn, sideOff;
+    private final Rect cropRect = new Rect();
     private final Spring[] cardFocus = new Spring[CARDS_MAX];
     private final RectF[] cardRects = new RectF[CARDS_MAX];
     private final List<HomeApps.Item> lightButtons = new ArrayList<>();
@@ -377,6 +386,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             topFocus[i] = new Spring(0.26f, 0.85f, 0);
             topRects[i] = new RectF();
         }
+        for (int i = 0; i < SIDE_N; i++) {
+            sideFocus[i] = new Spring(0.26f, 0.85f, 0);
+            sideRects[i] = new RectF();
+        }
         for (int i = 0; i < CARDS_MAX; i++) {
             cardFocus[i] = new Spring(0.32f, 0.78f, 0);
             cardRects[i] = new RectF();
@@ -466,6 +479,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         lightButtons.add(HomeApps.action(HomeApps.LIVE_TV, "live", Ui.tr("TV aberta", "Live TV"), "live_tv"));
         lightButtons.add(HomeApps.action(HomeApps.INPUTS, "inputs", Ui.tr("Entradas HDMI", "HDMI Inputs"), "hdmi"));
         lightButtons.add(HomeApps.action(HomeApps.SETTINGS, "settings", Ui.tr("Configurações", "Settings"), "settings"));
+        sideItems.clear();
+        sideItems.add(HomeApps.action(HomeApps.SETTINGS, "customize", Ui.tr("Personalizar", "Customize", "Personalizar"), "sparkles"));
+        sideItems.add(HomeApps.action(HomeApps.ANDROID_SETTINGS, "tv-settings", Ui.tr("Ajustes da TV", "TV Settings", "Ajustes de la TV"), "tv_settings"));
+    }
+
+    private static String[] sideNames() {
+        return new String[] {Ui.tr("Início", "Home", "Inicio"), Ui.tr("Filmes", "Movies", "Películas"), Ui.tr("Séries", "Shows", "Series"),
+                Ui.tr("Personalizar", "Customize", "Personalizar"), Ui.tr("Ajustes", "Settings", "Ajustes")};
     }
 
     private static String[] tabs() {
@@ -570,6 +591,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         lTip = Ui.text(Ui.semibold, 25 * k, L_INK);
         lTip.setTextAlign(Paint.Align.CENTER);
         lightGradient = null;
+        sideOn = Ui.text(Ui.semibold, 36 * k, 0xFFFFFFFF);
+        sideOff = Ui.text(Ui.medium, 36 * k, 0xFFFFFFFF);
         infoLabel = Ui.text(Ui.semibold, 24 * k, 0xB3FFFFFF);
         infoLabel.setLetterSpacing(0.08f);
         infoBig = Ui.numbers(Ui.thin, 168 * k, 0xFFFFFFFF);
@@ -631,7 +654,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         boolean tilesMoving = step(tileFocus, dt);
         boolean statusMoving = step(statusFocus, dt);
         boolean heroMoving = heroFocus.step(dt);
-        boolean topMoving = step(topFocus, dt), cardsMoving = step(cardFocus, dt);
+        boolean topMoving = step(topFocus, dt), cardsMoving = step(cardFocus, dt) | step(sideFocus, dt);
         if (topMoving) status.invalidate();
         heroMoving |= topMoving | cardsMoving;
         boolean drawerItemsMoving = step(drawerFocus, dt);
@@ -1284,13 +1307,27 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
      * 11 that anti-aliased clip costs the GPU a mask on every frame of a focus animation (measured on a Mi Box 3: most of
      * a 49 ms frame), so there the image is the shader of a rounded rectangle instead, which looks the same.
      */
+    /** The part of `image` that fills `cell` without stretching it (centered), or null when the shapes already match. */
+    private Rect coverCrop(Bitmap image, RectF cell) {
+        float ia = (float) image.getWidth() / image.getHeight(), ca = cell.width() / cell.height();
+        if (Math.abs(ia - ca) < 0.01f) return null;
+        if (ca < ia) {
+            int sw = Math.round(image.getHeight() * ca), sx = (image.getWidth() - sw) / 2;
+            cropRect.set(sx, 0, sx + sw, image.getHeight());
+        } else {
+            int sh = Math.round(image.getWidth() / ca), sy = (image.getHeight() - sh) / 2;
+            cropRect.set(0, sy, image.getWidth(), sy + sh);
+        }
+        return cropRect;
+    }
+
     private void roundImage(Canvas c, Bitmap image, RectF cell, float r) {
         if (!Ui.LEGACY) {
             clip.reset();
             clip.addRoundRect(cell, r, r, Path.Direction.CW);
             c.save();
             c.clipPath(clip);
-            c.drawBitmap(image, null, cell, bitmapPaint);
+            c.drawBitmap(image, coverCrop(image, cell), cell, bitmapPaint);
             c.restore();
             return;
         }
@@ -1299,8 +1336,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             shader = new BitmapShader(image, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
             imageShaders.put(image, shader);
         }
-        imageMatrix.setScale(cell.width() / image.getWidth(), cell.height() / image.getHeight());
-        imageMatrix.postTranslate(cell.left, cell.top);
+        float cover = Math.max(cell.width() / image.getWidth(), cell.height() / image.getHeight());
+        imageMatrix.setScale(cover, cover);
+        imageMatrix.postTranslate(cell.left - (image.getWidth() * cover - cell.width()) / 2, cell.top - (image.getHeight() * cover - cell.height()) / 2);
         shader.setLocalMatrix(imageMatrix);
         imageFill.setShader(shader);
         c.drawRoundRect(cell, r, r, imageFill);
@@ -1633,6 +1671,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (snap) heroFocus.snap(heroFocus.target);
         boolean topChanged = aim(topFocus, !sheetOpen && zone == Z_TOP ? topIndex : -1, snap);
         heroChanged |= aim(cardFocus, !sheetOpen && zone == Z_CARDS ? cardIndex : -1, snap) | topChanged;
+        heroChanged |= aim(sideFocus, !sheetOpen && zone == Z_SIDE ? sideIndex : -1, snap);
         statusChanged |= topChanged;
         tilesDirty |= snap || tilesChanged;
         statusDirty |= snap || statusChanged;
@@ -2032,6 +2071,19 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             if (drawerItems.isEmpty()) return;
             it = drawerItems.get(drawerIndex);
             r = drawerRects[drawerIndex];
+        } else if (zone == Z_SIDE) {
+            if (sideIndex < 3) {   // Home, Movies, Shows: select it and go to the posters
+                selectTab(sideIndex);
+                if (!cards.isEmpty()) {
+                    zone = Z_CARDS;
+                    cardIndex = 0;
+                    retarget(false);
+                    click.move();
+                }
+                return;
+            }
+            it = sideItems.get(sideIndex - 3);
+            r = sideRects[sideIndex];
         } else if (zone == Z_TOP) {
             if (topIndex < 3) {
                 selectTab(topIndex);
@@ -2229,12 +2281,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private void layoutLight() {
         if (lTab == null) return;
         // Text tabs; the focus pill extends 26 px past the text (the first tab's text starts at the margin).
-        float pad = 26 * k, tabTop = L_TABBAR_TOP * k, tabBottom = (L_TABBAR_TOP + L_TABBAR_H) * k;
-        float x = MARGIN * k - pad;
-        for (int i = 0; i < 3; i++) {
-            float tw = Math.max(lTabOn.measureText(tabs()[i]), lTab.measureText(tabs()[i]));
-            topRects[i].set(x, tabTop, x + tw + 2 * pad, tabBottom);
-            x = topRects[i].right + 4 * k;
+        for (int i = 0; i < SIDE_N; i++) {
+            float y = (SIDE_TOP + i * (SIDE_ITEM_H + SIDE_GAP)) * k;
+            sideRects[i].set(SIDE_X * k, y, (SIDE_X + SIDE_W) * k, y + SIDE_ITEM_H * k);
+            if (i < 3) topRects[i].set(sideRects[i]);   // keeps the old tab entries valid for accessibility
         }
         float b = L_BUTTON * k, right = CONTENT_R * k, cy = L_BUTTON_CY * k;
         for (int i = 2; i >= 0; i--) {
@@ -2255,8 +2305,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
      * them: one wide live card and two tall ones.
      */
     private void placeCards() {
-        float top = L_CARDS_TOP * k, ch = L_CARD_H * k, g = L_CARD_GAP * k, left = MARGIN * k, tall = L_TALL_W * k;
-        float full = (CONTENT_R - MARGIN) * k;
+        float top = L_CARDS_TOP * k, ch = L_CARD_H * k, g = L_CARD_GAP * k, left = CONTENT_L * k, tall = L_TALL_W * k;
+        float full = (CONTENT_R - CONTENT_L) * k;
         if (cards.isEmpty()) {
             float wide = full - 2 * tall - 2 * g;
             cardRects[0].set(left, top, left + wide, top + ch);
@@ -2454,41 +2504,53 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         applyTone();
         String hello = Config.NAME.isEmpty() ? Ui.tr("Para você", "For You")
                 : Ui.tr("Olá, " + Config.NAME + "!", "Hello, " + Config.NAME + "!", "¡Hola, " + Config.NAME + "!");
-        c.drawText(hello, MARGIN * k - Ui.leftBearing(lTitle, hello), L_TITLE_BASE * k, lTitle);
+        c.drawText(hello, CONTENT_L * k - Ui.leftBearing(lTitle, hello), L_TITLE_BASE * k, lTitle);
         if (!Config.NAME.isEmpty()) {
             String sub = Ui.tr("Descubra algo novo hoje", "Discover something new today", "Descubre algo nuevo hoy");
-            c.drawText(sub, MARGIN * k + lTitle.measureText(hello) + 36 * k, L_TITLE_BASE * k, lTab);
+            c.drawText(sub, CONTENT_L * k + lTitle.measureText(hello) + 36 * k, L_TITLE_BASE * k, lTab);
         }
-        // Text tabs (the selected one in bold, in the main text color); with focus on the tabs, the selected one gets
-        // the white pill with a shadow and grows a little (the tvOS focus).
-        float focus = Ui.clamp(topFocus[tab].value);
-        for (int i = 0; i < 3; i++) {
-            RectF r = topRects[i];
-            if (i == tab && focus > 0.01f) {
-                float s = 1 + 0.05f * focus;
-                cell.set(r.centerX() - r.width() * s / 2, r.centerY() - r.height() * s / 2,
-                        r.centerX() + r.width() * s / 2, r.centerY() + r.height() * s / 2);
-                float rr = cell.height() / 2;
-                if (focus > 0.01f) {
-                    tmp.set(cell);
-                    tmp.offset(0, 8 * k * focus);
-                    shadow.setColor(Ui.alpha(0xFF000000, tone(0.22f, 0.4f) * focus));
-                    shadows.draw(c, tmp, rr, SHADOW_BLUR * k, shadow);
-                }
-                fill.setShader(null);
-                fill.setColor(Ui.alpha(0xFFFFFFFF, focus));
-                c.drawRoundRect(cell, rr, rr, fill);
-            }
-            Paint p = i == tab ? lTabOn : lTab;
-            if (i == tab) lTabOn.setColor(blend(tone(L_INK, WHITE), L_INK, focus));   // always dark on the white pill
-            c.drawText(tabs()[i], r.centerX() - p.measureText(tabs()[i]) / 2, r.centerY() + Ui.halfCap(p), p);
-        }
+        drawSideMenu(c);
         int top = -1;
         int slots = cardSlots();
         for (int i = 0; i < slots; i++) if (cardFocus[i].value > 0.02f && (top < 0 || cardFocus[i].value > cardFocus[top].value)) top = i;
         for (int i = 0; i < slots; i++) if (i != top) drawLightCard(c, i);
         if (top >= 0) drawLightCard(c, top);
         if (HomeData.coinCount() > 0) drawQuotes(c);
+    }
+
+    /**
+     * The side menu: Home, Movies and Shows pick what the posters show (focusing one selects it, like the Apple TV tabs),
+     * Customize opens Free My TV's settings and Settings the TV's. The focused entry gets the white pill.
+     */
+    private void drawSideMenu(Canvas c) {
+        String[] names = sideNames();
+        String[] icons = {"home", "play", "tv", "sparkles", "settings"};
+        tmp.set(sideRects[0].left - 16 * k, sideRects[0].top - 18 * k, sideRects[SIDE_N - 1].right + 16 * k, sideRects[SIDE_N - 1].bottom + 18 * k);
+        fill.setShader(null);
+        fill.setColor(Ui.alpha(0xFFFFFFFF, tone(0.45f, 0.07f)));
+        c.drawRoundRect(tmp, 36 * k, 36 * k, fill);
+        for (int i = 0; i < SIDE_N; i++) {
+            float f = Ui.clamp(sideFocus[i].value);
+            boolean selected = i == tab;
+            RectF r = sideRects[i];
+            if (f > 0.01f) {
+                float sc = 1 + 0.04f * f;
+                cell.set(r.centerX() - r.width() * sc / 2, r.centerY() - r.height() * sc / 2, r.centerX() + r.width() * sc / 2, r.centerY() + r.height() * sc / 2);
+                float rr = 26 * k;
+                tmp.set(cell);
+                tmp.offset(0, 8 * k * f);
+                shadow.setColor(Ui.alpha(0xFF000000, tone(0.22f, 0.4f) * f));
+                shadows.draw(c, tmp, rr, SHADOW_BLUR * k, shadow);
+                fill.setColor(Ui.alpha(0xFFFFFFFF, f));
+                c.drawRoundRect(cell, rr, rr, fill);
+            }
+            int base = tone(L_INK, WHITE);
+            int ink = blend(Ui.alpha(base, selected ? 1f : 0.62f), L_INK, f);   // dark on the white pill
+            Paint p = selected || f > 0.5f ? sideOn : sideOff;
+            p.setColor(ink);
+            Symbols.draw(getContext(), c, icons[i], r.left + 48 * k, r.centerY(), 30 * k, ink);
+            c.drawText(names[i], r.left + 92 * k, r.centerY() + Ui.halfCap(p), p);
+        }
     }
 
     /**
@@ -2641,23 +2703,32 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private boolean moveLight(int dx, int dy) {
         switch (zone) {
             case Z_SHELF:
+                if (dx < 0 && shelfIndex == 0 && !shelf.isEmpty()) {   // left of the first app: the side menu
+                    zone = Z_SIDE;
+                    sideIndex = tab;
+                    break;
+                }
                 if (dy >= 0 || shelf.isEmpty()) return false;
                 if (cards.isEmpty()) {
                     zone = Z_TOP;
-                    topIndex = tab;
+                    topIndex = 3;
                 } else {
                     zone = Z_CARDS;
                     cardIndex = nearest(cardRects, cards.size(), tileRects[shelfIndex].centerX());
                 }
                 break;
             case Z_CARDS:
-                if (dx != 0) {
+                if (dx < 0 && cardIndex == 0) {   // left of the first poster: the side menu
+                    zone = Z_SIDE;
+                    sideIndex = tab;
+                } else if (dx != 0) {
                     int next = Math.max(0, Math.min(cards.size() - 1, cardIndex + dx));
                     if (next == cardIndex) return true;
                     cardIndex = next;
                 } else if (dy < 0) {
                     zone = Z_TOP;
-                    topIndex = tab;     // as on Apple TV: moving up to the tabs focuses the selected tab
+                    topIndex = 3;
+                    for (int j = 3; j < 6; j++) if (Math.abs(topRects[j].centerX() - cardRects[cardIndex].centerX()) < Math.abs(topRects[topIndex].centerX() - cardRects[cardIndex].centerX())) topIndex = j;
                 } else {
                     zone = Z_SHELF;
                     if (!shelf.isEmpty()) shelfIndex = nearest(tileRects, tileRects.length, cardRects[cardIndex].centerX());
@@ -2665,16 +2736,36 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 break;
             case Z_TOP:
                 if (dx != 0) {
-                    int next = Math.max(0, Math.min(5, topIndex + dx));
+                    int next = Math.max(3, Math.min(5, topIndex + dx));   // the three buttons (the tabs moved to the side menu)
                     if (next == topIndex) return true;
                     topIndex = next;
-                    if (topIndex < 3) selectTab(topIndex);   // like Apple TV tabs: focusing a tab selects it
                 } else if (dy > 0) {
                     if (cards.isEmpty()) {
                         zone = Z_SHELF;
                     } else {
                         zone = Z_CARDS;
                         cardIndex = nearest(cardRects, cards.size(), topRects[topIndex].centerX());
+                    }
+                } else {
+                    return true;
+                }
+                break;
+            case Z_SIDE:
+                if (dy != 0) {
+                    if (dy > 0 && sideIndex == SIDE_N - 1) {
+                        zone = Z_SHELF;
+                        break;
+                    }
+                    int next = Math.max(0, Math.min(SIDE_N - 1, sideIndex + dy));
+                    if (next == sideIndex) return true;
+                    sideIndex = next;
+                    if (sideIndex < 3) selectTab(sideIndex);   // focusing Home, Movies or Shows selects it
+                } else if (dx > 0) {
+                    if (cards.isEmpty()) {
+                        zone = Z_SHELF;
+                    } else {
+                        zone = Z_CARDS;
+                        cardIndex = 0;
                     }
                 } else {
                     return true;
