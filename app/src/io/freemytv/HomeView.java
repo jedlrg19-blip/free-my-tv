@@ -2244,8 +2244,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
      * same photo almost black (or a dark gradient), drawn on top during the transition.
      */
     /**
-     * The signature background: deep navy with a violet bloom at the top left, teal at the bottom right and a touch of
-     * magenta at the top right. Painted once at half size (smooth gradients scale up cleanly), so it costs nothing per frame.
+     * The signature background: deep navy with a violet bloom at the top left, teal at the bottom right, a touch of
+     * magenta at the top right and a fixed field of stars. Painted once at half size (smooth gradients scale up cleanly), so it costs nothing per frame.
      */
     private Bitmap paintNightArt() {
         int aw = Math.max(16, (int) screen.width() / 2), ah = Math.max(16, (int) screen.height() / 2);
@@ -2260,6 +2260,23 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             pt.setShader(new android.graphics.RadialGradient(aw * b[2] / 100f, ah * b[3] / 100f, r,
                     Ui.alpha(b[0], b[5] / 100f), b[0] & 0x00FFFFFF, Shader.TileMode.CLAMP));
             ac.drawRect(0, 0, aw, ah, pt);
+        }
+        // Stars: a fixed seed so the sky is the same every time. Mostly tiny and dim, a few bigger with a soft halo.
+        java.util.Random rnd = new java.util.Random(27);
+        int[] tints = {0xFFFFFFFF, 0xFFCFD8FF, 0xFFFFD0EC, 0xFFBFEFFF};
+        pt.setShader(null);
+        for (int i = 0; i < 170; i++) {
+            float sx = rnd.nextFloat() * aw, sy = rnd.nextFloat() * ah;
+            boolean big = i % 17 == 0;
+            float sr = big ? 1.8f + rnd.nextFloat() * 1.2f : 0.5f + rnd.nextFloat() * 0.9f;
+            int tint = tints[rnd.nextInt(tints.length)];
+            if (big) {
+                pt.setShader(new android.graphics.RadialGradient(sx, sy, sr * 5, Ui.alpha(tint, 0.35f), tint & 0x00FFFFFF, Shader.TileMode.CLAMP));
+                ac.drawCircle(sx, sy, sr * 5, pt);
+                pt.setShader(null);
+            }
+            pt.setColor(Ui.alpha(tint, big ? 0.95f : 0.25f + rnd.nextFloat() * 0.5f));
+            ac.drawCircle(sx, sy, sr, pt);
         }
         return art;
     }
