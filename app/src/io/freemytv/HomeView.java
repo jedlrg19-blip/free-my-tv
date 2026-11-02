@@ -2330,15 +2330,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 fill.setShader(lightGradient);
                 c.drawRect(screen, fill);
             }
-            if (night > 0.001f) {
-                if (nightArt == null) nightArt = paintNightArt();
-                artPaint.setColorFilter(v);
-                artPaint.setAlpha(Math.round(255 * night));
-                c.drawBitmap(nightArt, null, screen, artPaint);
-                artPaint.setColorFilter(null);
-            }
+            if (night > 0.001f) drawNightArt(c, v);
             fill.setShader(null);
             fill.setColorFilter(null);
+        } else if (night > 0.001f) {
+            drawNightArt(c, v);   // under the photo, which lets it show through at night
         }
         imagePaint.setColorFilter(v);
         if (fading && bgFrom != null) drawLightImage(c, bgFrom, bgTo == null ? 1 - e : 1);
@@ -2346,9 +2342,20 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         imagePaint.setColorFilter(null);
     }
 
+    private void drawNightArt(Canvas c, android.graphics.ColorFilter v) {
+        if (nightArt == null) nightArt = paintNightArt();
+        artPaint.setColorFilter(v);
+        artPaint.setAlpha(Math.round(255 * night));
+        c.drawBitmap(nightArt, null, screen, artPaint);
+        artPaint.setColorFilter(null);
+    }
+
+    /** How much of the blurred photo covers the aurora at night (the rest lets the aurora and stars through). */
+    private static final float NIGHT_PHOTO_ALPHA = 0.5f;
+
     private void drawLightImage(Canvas c, Backdrop b, float alpha) {
         if (night < 0.999f || b.nightImage == null) drawImage(c, b.lightImage, alpha);
-        if (night > 0.001f) drawImage(c, b.nightImage, alpha * night);
+        if (night > 0.001f) drawImage(c, b.nightImage, alpha * night * NIGHT_PHOTO_ALPHA);
     }
 
     private void drawLightTop(Canvas c) {
