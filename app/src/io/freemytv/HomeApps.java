@@ -57,6 +57,8 @@ final class HomeApps {
     static final int APP = 0, LIVE_TV = 1, INPUT = 2, ALL_APPS = 3, SETTINGS = 4, ANDROID_SETTINGS = 5;
     /** The "HDMI Inputs" button: opens the bottom drawer on the inputs (the home screen handles it). */
     static final int INPUTS = 7;
+    /** The last tile of the shelf: "+ Add apps", opens the shelf editor in Free My TV's settings. */
+    static final int ADD_APPS = 8;
     /** Image size of each card (16:9; on screen it shows up to ~330 px wide). */
     static final int TILE_W = 384, TILE_H = 216;
 
@@ -148,7 +150,40 @@ final class HomeApps {
             }
             items.add(it);
         }
+        items.add(addAppsItem());
         return items;
+    }
+
+    private static Item addAppsItem() {
+        Item it = new Item();
+        it.kind = ADD_APPS;
+        it.key = "add-apps";
+        it.label = Ui.tr("Adicionar apps", "Add apps", "Añadir apps");
+        it.tile = plusTile(it.label);
+        return it;
+    }
+
+    /** "+ Add apps": a violet to magenta gradient with a plus and the label (drawn once, like the other cards). */
+    private static synchronized Bitmap plusTile(String label) {
+        Bitmap b = TILES.get("add-apps|" + label);
+        if (b != null) return b;
+        b = Bitmap.createBitmap(TILE_W, TILE_H, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(b);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setShader(new LinearGradient(0, 0, TILE_W, TILE_H, 0xFF5B2BFF, 0xFFC03CFF, Shader.TileMode.CLAMP));
+        c.drawRect(0, 0, TILE_W, TILE_H, p);
+        p.setShader(null);
+        p.setColor(0xFFFFFFFF);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeCap(Paint.Cap.ROUND);
+        p.setStrokeWidth(10);
+        float cx = TILE_W / 2f, cy = TILE_H * 0.40f, a = 30;
+        c.drawLine(cx - a, cy, cx + a, cy, p);
+        c.drawLine(cx, cy - a, cx, cy + a, p);
+        Paint t = Ui.text(Ui.semibold, 34, 0xFFFFFFFF);
+        c.drawText(label, cx - t.measureText(label) / 2, TILE_H * 0.82f, t);
+        TILES.put("add-apps|" + label, b);
+        return b;
     }
 
     private static String[] known(String pkg) {
@@ -374,6 +409,9 @@ final class HomeApps {
                 break;
             case ANDROID_SETTINGS:
                 intent = new Intent(Settings.ACTION_SETTINGS);
+                break;
+            case ADD_APPS:
+                intent = new Intent().setComponent(new ComponentName(a, SettingsActivity.class)).putExtra("shelf", true);
                 break;
             default:
                 return false;

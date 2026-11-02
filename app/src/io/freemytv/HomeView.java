@@ -167,6 +167,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         GLOW_COLOR.put("vix", 0xFF7A00); GLOW_COLOR.put("spotify", 0x1DB954); GLOW_COLOR.put("disney", 0x2F5BFF);
         GLOW_COLOR.put("max", 0x7B4DFF); GLOW_COLOR.put("appletv", 0xB8BCC6); GLOW_COLOR.put("hulu", 0x1CE783);
         GLOW_COLOR.put("paramount", 0x0064FF); GLOW_COLOR.put("peacock", 0x6E55DC); GLOW_COLOR.put("globoplay", 0xFF5A1F);
+        GLOW_COLOR.put("add-apps", 0xB05BFF);
     }
     private static final int GLOW_DEFAULT = 0x8FA3C7;
     private static final int[][] PLACEHOLDER_ART = {{0xFF4B2BD8, 0xFF0E1B4D}, {0xFF00A7B5, 0xFF0B2A4A}, {0xFFE0457B, 0xFF3B1450}};
@@ -2318,7 +2319,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private void drawLightTop(Canvas c) {
         applyTone();
-        String hello = Ui.tr("Para você", "For You");
+        String hello = Config.NAME.isEmpty() ? Ui.tr("Para você", "For You")
+                : Ui.tr("Olá, " + Config.NAME + "!", "Hello, " + Config.NAME + "!", "¡Hola, " + Config.NAME + "!");
         c.drawText(hello, MARGIN * k - Ui.leftBearing(lTitle, hello), L_TITLE_BASE * k, lTitle);
         // Text tabs (the selected one in bold, in the main text color); with focus on the tabs, the selected one gets
         // the white pill with a shadow and grows a little (the tvOS focus).

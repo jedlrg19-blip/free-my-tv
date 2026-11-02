@@ -56,6 +56,11 @@ public class SettingsActivity extends Activity {
         super.onResume();
         view.resume();
         // From ADB: am start -n io.freemytv/.SettingsActivity --ez screensaver true (straight to the preview).
+        // From the home screen's "+ Add apps" tile: straight to the shelf editor.
+        if (preview == null && getIntent().getBooleanExtra("shelf", false)) {
+            getIntent().removeExtra("shelf");
+            view.goToShelf();
+        }
         if (preview == null && getIntent().getBooleanExtra("screensaver", false)) {
             getIntent().removeExtra("screensaver");
             view.pause();
@@ -731,6 +736,8 @@ public class SettingsActivity extends Activity {
         }
 
         // MARK: - Shelf editor
+
+        void goToShelf() { openShelfEditor(); invalidate(); }
 
         private void openShelfEditor() {
             shelfOrder.clear();

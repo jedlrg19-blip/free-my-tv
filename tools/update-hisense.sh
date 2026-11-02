@@ -8,6 +8,9 @@ cd "$(dirname "$0")/.."
 
 git pull --ff-only
 
+# The greeting on the home screen ("Hello, Joshua!"). Change it in config.properties if you like.
+grep -qE '^[[:space:]]*name[[:space:]]*=' config.properties 2>/dev/null || echo 'name=Joshua' >> config.properties
+
 # Asks for the TMDB key (typed hidden), checks it against TMDB and keeps asking until it works or you skip.
 check_key() { # prints the HTTP code TMDB answers, never the key
   if [[ "$1" == eyJ* ]]; then
