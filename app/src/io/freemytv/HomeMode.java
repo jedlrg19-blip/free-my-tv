@@ -66,6 +66,8 @@ final class HomeMode {
         // Hisense (HiSmartTV A4, Android 9)
         "com.hisense.storemode", "com.hisense.app.logreport",                         // store demo, log reporting
         "fusion.android.tv.demo", "com.pandora.android.atv", "air.com.vudu.air.DownloaderTablet", // demo, Pandora, Vudu
+        "com.google.android.youtube.tvkids", "com.google.android.videos", "com.seraphic.browser", // YouTube Kids, Play Movies, Puffin
+        "com.hisense.alexa", "com.hisense.service.message",                           // Alexa, Hisense messages
     };
 
     /** The voice assistant, only with disable_assistant=true in config.properties (the mic button stops working). */

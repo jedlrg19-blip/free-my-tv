@@ -106,7 +106,11 @@ final class HomeApps {
             "com.hisense.storemode",                // Hisense: store demo
             "fusion.android.tv.demo",               // demo
             "com.pandora.android.atv",              // Pandora
-            "air.com.vudu.air.DownloaderTablet"));  // Vudu
+            "air.com.vudu.air.DownloaderTablet",    // Vudu
+            "com.google.android.youtube.tvkids",    // YouTube Kids
+            "com.google.android.videos",            // Play Movies
+            "com.seraphic.browser",                 // Puffin browser
+            "com.hisense.alexa"));                  // Alexa
 
     private static final Map<String, Bitmap> TILES = new HashMap<>();   // key → ready card
     private static final Map<String, Bitmap> LOGOS = new HashMap<>();   // key → colored logo with no background
