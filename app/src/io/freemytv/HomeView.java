@@ -139,6 +139,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private final RectF[] cardRects = new RectF[3];
     private final List<HomeApps.Item> lightButtons = new ArrayList<>();
     private Paint lTitle, lTab, lTabOn, lCardTitle, lCardMeta, lQuote, lTip;
+    private Paint infoLabel, infoBig, infoTemp, infoMid, infoDim;   // text of the live cards (no picks yet)
+    private String infoDate = "";
+    private long infoMinute = -1;
     private Shader lightGradient;
 
     // Shelf
@@ -534,6 +537,12 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         lTip = Ui.text(Ui.semibold, 25 * k, L_INK);
         lTip.setTextAlign(Paint.Align.CENTER);
         lightGradient = null;
+        infoLabel = Ui.text(Ui.semibold, 24 * k, 0xB3FFFFFF);
+        infoLabel.setLetterSpacing(0.08f);
+        infoBig = Ui.numbers(Ui.thin, 168 * k, 0xFFFFFFFF);
+        infoTemp = Ui.numbers(Ui.light, 104 * k, 0xFFFFFFFF);
+        infoMid = Ui.text(Ui.medium, 36 * k, 0xFFFFFFFF);
+        infoDim = Ui.text(Ui.regular, 28 * k, 0xB3FFFFFF);
         nightArt = null;
         buttonPaint = Ui.text(Ui.semibold, 29 * k, INK);
         capsuleText = Ui.numbers(Ui.medium, 29 * k, 0xF2FFFFFF);
@@ -2326,6 +2335,62 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     }
 
     /**
+     * Live cards for when there are no picks (no TMDB key yet, or offline): each one shows something real from the data
+     * the home screen already has. Now (time, greeting, place), the weather, and the sun.
+     */
+    private void drawInfoCard(Canvas c, int i, RectF b) {
+        float pad = 40 * k, x = b.left + pad, y = b.top;
+        HomeData.Weather wx = data.weather;
+        boolean hasWx = !Double.isNaN(wx.temp);
+        if (infoMinute != clockMinute) {
+            infoMinute = clockMinute;
+            infoDate = new java.text.SimpleDateFormat(Ui.en ? "EEEE, MMMM d" : "EEEE d 'de' MMMM", Ui.locale())
+                    .format(new java.util.Date());
+            if (!infoDate.isEmpty()) infoDate = Character.toUpperCase(infoDate.charAt(0)) + infoDate.substring(1);
+        }
+        if (i == 0) {
+            c.drawText(Ui.tr("AGORA", "NOW", "AHORA"), x, y + 64 * k, infoLabel);
+            c.drawText(clockText, x - Ui.leftBearing(infoBig, clockText), y + 218 * k, infoBig);
+            int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+            String hello = hour < 6 ? Ui.tr("Boa madrugada", "Good night", "Buena madrugada")
+                    : hour < 12 ? Ui.tr("Bom dia", "Good morning", "Buenos días")
+                    : hour < 19 ? Ui.tr("Boa tarde", "Good afternoon", "Buenas tardes")
+                    : Ui.tr("Boa noite", "Good evening", "Buenas noches");
+            c.drawText(hello, x, y + 282 * k, infoMid);
+            String place = Prefs.city().isEmpty() ? infoDate : infoDate + "  ·  " + Prefs.city();
+            c.drawText(place, x, y + 328 * k, infoDim);
+        } else if (i == 1) {
+            c.drawText(Ui.tr("CLIMA", "WEATHER", "CLIMA"), x, y + 64 * k, infoLabel);
+            if (!hasWx) {
+                c.drawText("—", x, y + 190 * k, infoTemp);
+                return;
+            }
+            String deg = HomeData.degrees(wx.temp);
+            c.drawText(deg, x - Ui.leftBearing(infoTemp, deg), y + 190 * k, infoTemp);
+            Symbols.draw(getContext(), c, Symbols.weather(wx.code, wx.isDay), b.right - pad - 30 * k, y + 150 * k, 56 * k, 0xFFFFFFFF);
+            c.drawText(HomeData.condition(wx.code, wx.isDay), x, y + 262 * k, infoMid);
+            c.drawText(Ui.en ? "H:" + HomeData.degrees(wx.max) + "  L:" + HomeData.degrees(wx.min)
+                    : "Máx. " + HomeData.degrees(wx.max) + "  Mín. " + HomeData.degrees(wx.min), x, y + 308 * k, infoDim);
+        } else {
+            c.drawText(Ui.tr("O SOL", "THE SUN", "EL SOL"), x, y + 64 * k, infoLabel);
+            if (wx.sunrise == 0 && wx.sunset == 0) {
+                c.drawText("—", x, y + 190 * k, infoTemp);
+                return;
+            }
+            float row = y + 150 * k;
+            String[][] rows = {{"sunrise", Ui.tr("Nascer", "Sunrise", "Amanecer"), wx.sunrise == 0 ? "" : Ui.time(wx.sunrise)},
+                    {"sunset", Ui.tr("Pôr do sol", "Sunset", "Atardecer"), wx.sunset == 0 ? "" : Ui.time(wx.sunset)}};
+            for (String[] r : rows) {
+                if (r[2].isEmpty()) continue;
+                Symbols.draw(getContext(), c, r[0], x + 18 * k, row - 12 * k, 36 * k, 0xFFFFFFFF);
+                c.drawText(r[1], x + 56 * k, row - 20 * k, infoDim);
+                c.drawText(r[2], x + 56 * k, row + 22 * k, infoMid);
+                row += 100 * k;
+            }
+        }
+    }
+
+    /**
      * Recommendation card: the title's photo (already at the focused card size, so it stays sharp), rounded corners and
      * a soft shadow; when focused, it grows 5%, rises and lights up its border. Below it, the title (and on the large
      * card, genre · runtime · service).
@@ -2356,6 +2421,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             fill.setShader(new LinearGradient(cell.left, cell.top, cell.right, cell.bottom, art[0], art[1], Shader.TileMode.CLAMP));
             c.drawRoundRect(cell, r, r, fill);
             fill.setShader(null);
+            if (p == null && cards.isEmpty()) drawInfoCard(c, i, base);
         }
         if (f > 0.01f) {
             sheen.setShader(new LinearGradient(cell.left, cell.top, cell.left + cell.width() * 0.5f, cell.bottom,
