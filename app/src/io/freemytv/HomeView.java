@@ -155,6 +155,18 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         TILE_STYLE.put("max", new int[] {0xFF5C30E8, 0xFF221684, 0});
         TILE_STYLE.put("appletv", new int[] {0xFF1C1C1E, 0xFF000000, 0});
     }
+    /** Glow behind the shelf, per app (brand color): a soft light that slides to the focused icon. */
+    private static final Map<String, Integer> GLOW_COLOR = new HashMap<>();
+    static {
+        GLOW_COLOR.put("netflix", 0xE50914); GLOW_COLOR.put("youtube", 0xFF0033); GLOW_COLOR.put("prime", 0x1A98FF);
+        GLOW_COLOR.put("vix", 0xFF7A00); GLOW_COLOR.put("spotify", 0x1DB954); GLOW_COLOR.put("disney", 0x2F5BFF);
+        GLOW_COLOR.put("max", 0x7B4DFF); GLOW_COLOR.put("appletv", 0xB8BCC6); GLOW_COLOR.put("hulu", 0x1CE783);
+        GLOW_COLOR.put("paramount", 0x0064FF); GLOW_COLOR.put("peacock", 0x6E55DC); GLOW_COLOR.put("globoplay", 0xFF5A1F);
+    }
+    private static final int GLOW_DEFAULT = 0x8FA3C7;
+    private final Map<Integer, android.graphics.RadialGradient> glowShaders = new HashMap<>();
+    private final Matrix glowMatrix = new Matrix();
+    private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final android.graphics.PorterDuffColorFilter whiteLogo =
             new android.graphics.PorterDuffColorFilter(0xFFFFFFFF, android.graphics.PorterDuff.Mode.SRC_IN);
     private final RectF platterRect = new RectF();
@@ -590,6 +602,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         // they rise; the drawer is drawn resting in place; the glass shelf is redrawn once the drawer stops, so the
         // glass shows the background where it ended up.
         if (tilesMoving || tilesDirty) tiles.invalidate();
+        if (tilesMoving && !drawerOpen) sky.invalidate();   // the shelf's ambient glow follows the focus
         if (statusMoving || statusDirty || bgFading) status.invalidate();
         if (heroMoving || heroDirty || heroFading) heroLayer.invalidate();
         if (drawerItemsMoving || drawerDirty || bgFading) drawerLayer.invalidate();
@@ -915,6 +928,34 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private void drawSky(Canvas c) {
         drawLightSky(c);
+        drawFocusGlow(c);
+    }
+
+    /**
+     * Ambient light in the focused app's color, behind the shelf. It follows the focus springs (so it slides from one
+     * icon to the next) and only exists while the shelf is showing; nothing animates when the focus is still.
+     */
+    private void drawFocusGlow(Canvas c) {
+        float away = 1 - Ui.clamp(drawer.value * 8);
+        if (away <= 0.01f) return;
+        for (int i = 0; i < shelf.size() && i < tileFocus.length; i++) {
+            float f = Ui.clamp(tileFocus[i].value);
+            if (f < 0.02f) continue;
+            RectF base = tileRects[i];
+            int rgb = GLOW_COLOR.containsKey(shelf.get(i).key) ? GLOW_COLOR.get(shelf.get(i).key) : GLOW_DEFAULT;
+            android.graphics.RadialGradient g = glowShaders.get(rgb);
+            if (g == null) {
+                g = new android.graphics.RadialGradient(0, 0, 1, 0xFF000000 | rgb, rgb, Shader.TileMode.CLAMP);
+                glowShaders.put(rgb, g);
+            }
+            glowMatrix.setScale(base.width() * 2.4f, base.height() * 4.2f);
+            glowMatrix.postTranslate(base.centerX(), base.centerY() - base.height() * 0.4f);
+            g.setLocalMatrix(glowMatrix);
+            glowPaint.setShader(g);
+            glowPaint.setAlpha(Math.round(255 * tone(0.30f, 0.50f) * f * away));
+            c.drawRect(screen, glowPaint);
+        }
+        glowPaint.setShader(null);
     }
 
     /** Blends a color on top (the drawer's veil) as part of drawing the image, without another layer. */
